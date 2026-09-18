@@ -159,4 +159,51 @@ describe('Testing rendering loaded icon', () => {
 			`${styleOpeningTag}${expectedInline}</style><span style="--svg: url(&quot;data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cg %2F%3E%3C%2Fsvg%3E&quot;); width: 24px; height: 24px; background-color: transparent; background-image: var(--svg); background-repeat: no-repeat; background-size: 100% 100%;"></span>`
 		);
 	});
+
+	it('SPAN preview URL survives proxy rewriting and preserves icon geometry', () => {
+		const doc = setupDOM('').window.document;
+		const node = doc.createElement('div');
+		updateStyle(node, true);
+
+		renderIcon(node, {
+			rendered: true,
+			icon: {
+				value: 'mdi:home',
+				data: {
+					...defaultIconProps,
+					body: '<path d="M0 0h16v16z" fill="currentColor" />',
+				},
+			},
+			renderedMode: 'mask',
+			inline: true,
+			customisations: {
+				...defaultCustomisations,
+			},
+		});
+
+		const preview = node.querySelector('span');
+		expect(preview).not.toBeNull();
+
+		const url = preview!.style.getPropertyValue('--svg');
+		expect(url).not.toContain('http://');
+		expect(url).not.toContain('https://');
+
+		// Simulate a reverse proxy rewriting literal protocol strings.
+		const proxiedURL = url.replace(/http:\/\//g, 'https://');
+		expect(proxiedURL).toBe(url);
+
+		const match = proxiedURL.match(/^url\(["']?data:image\/svg\+xml,(.*)["']?\)$/);
+		expect(match).not.toBeNull();
+
+		const decodedSVG = decodeURIComponent(match![1]);
+		expect(decodedSVG).toContain(
+			"xmlns='http://www.w3.org/2000/svg'"
+		);
+		expect(decodedSVG).not.toContain(
+			"xmlns='https://www.w3.org/2000/svg'"
+		);
+		expect(decodedSVG).toContain(
+			"<path d='M0 0h16v16z' fill='currentColor' />"
+		);
+	});
 });
