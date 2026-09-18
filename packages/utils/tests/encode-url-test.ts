@@ -50,4 +50,29 @@ describe('Testing generating url()', () => {
 		expect(url).not.toContain('http://');
 		expect(url).not.toContain('https://');
 	});
+
+	test('Survives proxy rewriting and round-trips SVG geometry', () => {
+		const html =
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M0 0h16v16z" fill="currentColor" /></svg>';
+		const url = svgToURL(html);
+
+		// Simulate a reverse proxy that blindly rewrites literal protocol strings.
+		// Properly encoded SVG data must be unchanged by this transformation.
+		const proxiedURL = url.replace(/http:\/\//g, 'https://');
+		expect(proxiedURL).toBe(url);
+
+		const prefix = 'url("data:image/svg+xml,';
+		const encodedSVG = proxiedURL.slice(prefix.length, -2);
+		const decodedSVG = decodeURIComponent(encodedSVG);
+
+		expect(decodedSVG).toContain(
+			"xmlns='http://www.w3.org/2000/svg'"
+		);
+		expect(decodedSVG).not.toContain(
+			"xmlns='https://www.w3.org/2000/svg'"
+		);
+		expect(decodedSVG).toContain(
+			"<path d='M0 0h16v16z' fill='currentColor' />"
+		);
+	});
 });
